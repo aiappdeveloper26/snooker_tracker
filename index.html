@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Baize & Break — Snooker Tracker</title>
+<title>Century Break — Snooker Tracker</title>
 <style>
   :root{
     --baize:#0B3D2E;--baize-dark:#072921;--cushion:#6B3A2C;
@@ -172,7 +172,7 @@
 <body>
 <header>
   <div class="header-top">
-    <div><h1>Baize <span class="accent">&amp;</span> Break</h1></div>
+    <div><h1>Century Break</h1></div>
     <div style="display:flex;align-items:center;gap:8px;">
       <span class="admin-badge" id="adminBadge">Admin</span>
       <button class="lock-btn" id="lockBtn" title="Admin mode" onclick="toggleAdminMode()">🔒</button>
@@ -476,6 +476,7 @@ const T = {
     hist_filter:"Filter by opponent",hist_all:"All opponents",
     hist_opened:"opened",hist_break:"break",hist_frames:"Frames",
     hist_empty:"No sessions found.",
+    hist_set_name:"Set your name in the profile bar above to see your session history.",
     h2h_title:"Head‑to‑head",h2h_sub:"Pick two players to see the full rivalry breakdown.",
     h2h_p1:"Player 1",h2h_p2:"Player 2",
     h2h_sessions:"Sessions",h2h_total_frames:"Total frames",
@@ -567,6 +568,7 @@ const T = {
     hist_filter:"按對手篩選",hist_all:"所有對手",
     hist_opened: "開桿", hist_break: "連桿", hist_frames:"局數",
     hist_empty:"找不到記錄。",
+    hist_set_name:"請先在上方設定你的名字以查看對局歷史。",
     h2h_title:"直接對決",h2h_sub:"選擇兩位球員查看對決詳情。",
     h2h_p1:"球員1",h2h_p2:"球員2",
     h2h_sessions: "場次", h2h_total_frames:"總局數",
@@ -692,7 +694,9 @@ const JSONBIN_API = "https://api.jsonbin.io/v3/b";
 // Supabase credentials
 const SUPA_KEY_KEY = "snooker_supa_key";
 const SUPA_URL_KEY = "snooker_supa_url";
-let   SUPA_URL  = (localStorage.getItem(SUPA_URL_KEY) || DEFAULT_SUPA_URL).replace(/\/+$/, "");
+let   SUPA_URL  = (localStorage.getItem(SUPA_URL_KEY) || DEFAULT_SUPA_URL)
+                    .replace(/\/+$/, "")
+                    .replace(/\/rest\/v1\/?$/, "");
 let   SUPA_KEY  = localStorage.getItem(SUPA_KEY_KEY) || DEFAULT_SUPA_KEY;
 const SUPA_TABLE = "snooker_data";
 const SUPA_ROW   = "main";
@@ -716,7 +720,11 @@ async function jsonbinSave(d){
 function supaHeaders(){
   return {"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`};
 }
-function supaBase(){ return SUPA_URL.replace(/\/+$/, ""); } // always strip trailing slash
+function supaBase(){
+  // Strip trailing slashes and any accidental /rest/v1 suffix
+  // (Supabase dashboard sometimes shows the API URL with /rest/v1 appended)
+  return SUPA_URL.replace(/\/+$/, "").replace(/\/rest\/v1\/?$/, "");
+}
 async function supaLoad(){
   const url = `${supaBase()}/rest/v1/${SUPA_TABLE}?id=eq.${SUPA_ROW}&select=data`;
   const r = await fetch(url, {headers:{...supaHeaders(),"Accept":"application/json"}});
@@ -963,7 +971,9 @@ document.getElementById("setupSaveBtn").addEventListener("click", async ()=>{
   statusEl.style.color = "var(--ivory-dim)";
 
   if(isSupa){
-    const url = document.getElementById("setupSupaUrl").value.trim().replace(/\/+$/, ""); // strip trailing slashes
+    const url = document.getElementById("setupSupaUrl").value.trim()
+      .replace(/\/+$/, "")          // strip trailing slashes
+      .replace(/\/rest\/v1\/?$/, ""); // strip accidental /rest/v1 suffix
     const key = document.getElementById("setupSupaKey").value.trim();
     if(!url || !url.startsWith("https://")){
       statusEl.textContent = "✗ " + t("toast_bad_supa_url");
@@ -1085,7 +1095,7 @@ async function fetchAndRender(quiet=false){
     renderProfileBar(); renderAll();
     return true;
   } catch(e){
-    if(!quiet) showSync("error", t("sync_load_err"));
+    if(!quiet) showSync("error", t("sync_load_err")); // only show error banner for manual refresh
     return false;
   }
 }
@@ -1497,8 +1507,18 @@ document.getElementById("historyFilter").addEventListener("change",renderHistory
 
 function renderHistory(){
   renderHistoryFilter();
-  const list=mySessionsSorted(document.getElementById("historyFilter").value);
   const cont=document.getElementById("historyList");cont.innerHTML="";
+
+  // If no profile set, prompt the user instead of showing empty state
+  if(!activeProfile){
+    cont.innerHTML=`<div class="empty-state"><div class="empty-ball"></div>
+      <p>${t("hist_set_name")}</p>
+      <button class="btn" style="margin-top:12px;" onclick="promptNewProfile()">${t("profile_add")}</button>
+    </div>`;
+    return;
+  }
+
+  const list=mySessionsSorted(document.getElementById("historyFilter").value);
   if(!list.length){cont.innerHTML=`<div class="empty-state"><div class="empty-ball"></div>${t("hist_empty")}</div>`;return;}
   list.forEach(s=>{
     // From my perspective: am I p1 or p2?
@@ -1516,6 +1536,8 @@ function renderHistory(){
 
     const openerName=s.opener==="p1"?s.player1:s.player2;
     const metaParts=[`${t("hist_opened")}: ${openerName}`];
+    if(s.recorded_by && s.recorded_by !== activeProfile)
+      metaParts.push(`${t("hist_by")}: ${s.recorded_by}`); // show who recorded it
     if(s.break_value!=null){
       const bp=s.break_player==="p1"?s.player1:s.player2;
       metaParts.push(`${t("hist_break")} ${s.break_value} (${bp})`);
@@ -1543,11 +1565,14 @@ function renderHistory(){
         <div class="si-score ${cls}">${scoreText}</div>
         ${canDelete?`<button class="si-del" data-id="${s.id}">✕</button>`:""}
       </div>`;
-    row.querySelector(".si-del").addEventListener("click",async()=>{
-      if(!confirm("Delete this session?"))return;
-      const idx=data.sessions.findIndex(x=>x.id===s.id);
-      if(idx>-1){data.sessions.splice(idx,1);await saveAndSync();renderHistory();toast(t("toast_deleted"));}
-    });
+    const delBtn = row.querySelector(".si-del");
+    if(delBtn){
+      delBtn.addEventListener("click",async()=>{
+        if(!confirm("Delete this session?"))return;
+        const idx=data.sessions.findIndex(x=>x.id===s.id);
+        if(idx>-1){data.sessions.splice(idx,1);await saveAndSync();renderHistory();toast(t("toast_deleted"));}
+      });
+    }
     cont.appendChild(row);
   });
 }
