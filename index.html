@@ -153,6 +153,12 @@
   footer span{color:var(--gold);cursor:pointer;text-decoration:underline;}
   .refresh-btn{font-family:"SF Mono","Roboto Mono",monospace;font-size:12px;background:rgba(0,0,0,0.22);border:1px solid var(--line);border-radius:999px;padding:5px 14px;color:var(--ivory-dim);cursor:pointer;transition:all .15s;}
   .refresh-btn:hover{border-color:var(--gold);color:var(--ivory);}
+  .group-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;padding:0 20px;}
+  .group-chip{font-family:"SF Mono","Roboto Mono",monospace;font-size:11px;background:rgba(0,0,0,0.22);border:1px solid var(--line);border-radius:999px;padding:5px 12px;color:var(--ivory-dim);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;}
+  .group-chip:hover{border-color:var(--gold);color:var(--ivory);}
+  .group-chip.active{background:rgba(107,58,44,0.6);color:var(--ivory);border-color:var(--cushion);}
+  .group-chip .gid{font-size:10px;opacity:0.6;letter-spacing:1px;}
+  .group-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:6px;}
   /* Admin */
   .admin-badge{display:none;font-family:"SF Mono","Roboto Mono",monospace;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;background:var(--red-ball);color:#fff;border-radius:999px;padding:4px 10px;}
   body.admin-mode .admin-badge{display:inline-block;}
@@ -186,7 +192,8 @@
 </header>
 
 <div class="profile-bar" id="profileBar"></div>
-<div style="text-align:center;margin-top:10px;">
+<div style="text-align:center;margin-top:6px;" id="groupBar"></div>
+<div style="text-align:center;margin-top:8px;">
   <button class="refresh-btn" onclick="manualRefresh()" id="refreshBtn">⟳ <span data-i18n="btn_refresh">Refresh</span></button>
 </div>
 
@@ -206,21 +213,14 @@
     <p class="sub" data-i18n="rec_sub">One entry updates both players automatically.</p>
 
     <div class="field">
-      <label data-i18n="rec_p1">Player 1 (you)</label>
+      <label data-i18n="rec_p1">Player 1</label>
       <select id="p1Select"></select>
-      <div class="new-friend-row" id="newP1Row" style="display:none;">
-        <input type="text" id="newP1Input" placeholder="Name">
-        <button class="btn secondary small" id="addP1Btn" type="button" data-i18n="rec_add">Add</button>
-      </div>
     </div>
 
     <div class="field">
-      <label data-i18n="rec_p2">Player 2 (opponent)</label>
+      <label data-i18n="rec_p2">Player 2</label>
       <select id="p2Select"></select>
-      <div class="new-friend-row" id="newP2Row" style="display:none;">
-        <input type="text" id="newP2Input" placeholder="Name">
-        <button class="btn secondary small" id="addP2Btn" type="button" data-i18n="rec_add">Add</button>
-      </div>
+      <p id="samePlyerErr" style="display:none;color:var(--red-ball);font-size:12px;font-family:var(--mono);margin-top:5px;" data-i18n="toast_same_player">Player 1 and Player 2 must be different.</p>
     </div>
 
     <div class="field">
@@ -365,6 +365,38 @@
     </div>
   </section>
 
+  <!-- GROUP -->
+  <section class="panel config-not-set" id="tab-group">
+    <div class="setup-panel">
+      <h2>🎱 <span data-i18n="group_title">Join or create a group</span></h2>
+      <p data-i18n="group_desc">Each group has its own records. Share the Group ID with friends so they can join.</p>
+
+      <div id="groupExisting" style="display:none;">
+        <label data-i18n="group_my_groups">Your groups</label>
+        <div id="groupExistingList" style="margin-bottom:18px;"></div>
+      </div>
+
+      <div style="border-top:1px solid var(--line);padding-top:20px;margin-top:4px;">
+        <label data-i18n="group_create_label">Create a new group</label>
+        <div class="field" style="margin-bottom:10px;">
+          <input type="text" id="groupNameInput" data-i18n-ph="group_name_ph" placeholder="e.g. Tuesday Boys" maxlength="40">
+        </div>
+        <button class="btn" id="createGroupBtn" type="button" data-i18n="group_create_btn">Create group</button>
+        <p id="createGroupStatus" style="font-size:13px;font-family:monospace;margin-top:10px;min-height:18px;"></p>
+      </div>
+
+      <div style="border-top:1px solid var(--line);padding-top:20px;margin-top:20px;">
+        <label data-i18n="group_join_label">Join an existing group</label>
+        <p style="font-size:13px;color:var(--ivory-dim);margin-bottom:10px;" data-i18n="group_join_desc">Enter the Group ID shared with you by a friend.</p>
+        <div class="field" style="margin-bottom:10px;">
+          <input type="text" id="groupJoinInput" placeholder="e.g. POOL-7F3K" style="text-transform:uppercase;letter-spacing:2px;" maxlength="20">
+        </div>
+        <button class="btn secondary" id="joinGroupBtn" type="button" data-i18n="group_join_btn">Join group</button>
+        <p id="joinGroupStatus" style="font-size:13px;font-family:monospace;margin-top:10px;min-height:18px;"></p>
+      </div>
+    </div>
+  </section>
+
   <!-- SETUP -->
   <section class="panel config-not-set" id="tab-setup">
     <div class="setup-panel">
@@ -411,13 +443,13 @@
   id text primary key,
   data jsonb not null
 );
-insert into snooker_data (id, data)
-  values ('main', '{"friends":[],"sessions":[]}');
 alter table snooker_data enable row level security;
 create policy "public read"
   on snooker_data for select using (true);
 create policy "public write"
-  on snooker_data for update using (true);</pre>
+  on snooker_data for update using (true);
+create policy "public insert"
+  on snooker_data for insert with check (true);</pre>
         </details>
         <div class="field">
           <label data-i18n="setup_sb_url">Project URL</label>
@@ -439,7 +471,7 @@ create policy "public write"
 </main>
 
 <footer>
-  <span id="footerSync">Data synced to JSONBin</span> &nbsp;·&nbsp;
+  <span id="footerSync">Data synced</span> &nbsp;·&nbsp;
   <span id="changeBinBtn" data-i18n="setup_change">Change storage</span>
 </footer>
 
@@ -468,7 +500,9 @@ const T = {
     rec_break_check:"Record highest break",rec_break_who:"Who scored it?",rec_break_val:"Break value",
     rec_save:"Save session",
     lb_title:"Leaderboard",lb_sub:"Ranked across all recorded sessions. One entry counts for both players.",
-    lb_player:"Player",lb_sessions_won:"Sessions W",lb_frames_won:"Frames W",lb_played:"Played",lb_win_rate:"Win%",
+    lb_player:"Player",lb_sessions_won:"Sessions W",lb_frames_won:"Frames W",lb_played:"Played",
+    lb_sessions_played:"Sessions",lb_frames_played:"Frames",
+    lb_win_rate:"Win%",
     lb_sessions_label:"🏅 Sessions leaderboard",lb_frames_label:"🎱 Frames leaderboard",
     lb_frames_na:"(no frame scores recorded)",
     lb_empty:"No sessions yet. Record a session to get started.",
@@ -499,8 +533,30 @@ const T = {
     setup_label:"JSONBin Bin ID",setup_btn:"Save & connect",setup_clear:"Clear",
     setup_change:"Change Bin ID",
     setup_current:"Current ID:",setup_none:"No ID saved.",
-    footer_sync:"Data synced to JSONBin",
+    footer_sync:"Data synced to Supabase",
     btn_refresh:"Refresh",
+    group_title:"Join or create a group",
+    group_desc:"Each group has its own records. Share the Group ID with friends so they can join.",
+    group_my_groups:"Your groups",
+    group_create_label:"Create a new group",
+    group_name_ph:"e.g. Tuesday Boys",
+    group_create_btn:"Create group",
+    group_join_label:"Join an existing group",
+    group_join_desc:"Enter the Group ID shared with you by a friend.",
+    group_join_btn:"Join group",
+    group_switch:"Switch group",
+    group_leave:"Leave",
+    group_id_copied:"Group ID copied!",
+    group_creating:"⟳ Creating group…",
+    group_created:"✓ Group created! Your Group ID:",
+    group_joining:"⟳ Joining group…",
+    group_joined:"✓ Joined!",
+    group_not_found:"✗ Group not found. Check the ID and try again.",
+    group_err:"✗ Error: {msg}",
+    group_name_required:"Enter a group name first.",
+    group_id_required:"Enter a Group ID to join.",
+    group_manage:"Manage groups",
+    group_leave_confirm:"Leave group {name}? You can rejoin anytime with the Group ID.",
     setup_backend:"Storage backend",
     setup_jb_desc:"Free JSON storage. 10,000 lifetime requests — plenty for years of casual play.",
     setup_sb_desc:"Free Postgres database. Unlimited API requests — ideal for long-term use.",
@@ -560,19 +616,21 @@ const T = {
     rec_break_check:"記錄最高連桿",rec_break_who:"誰打出的？",rec_break_val:"連桿分數",
     rec_save:"儲存對局",
     lb_title:"排行榜",lb_sub:"根據所有記錄排名，一次輸入兩位球員同時更新。",
-    lb_player: "球員", lb_sessions_won: "勝場", lb_frames_won:"勝局",lb_played:"場次",lb_win_rate:"勝率",
-    lb_sessions_label: "🏅 場次排行榜", lb_frames_label:"🎱 局數排行榜",
+    lb_player:"球員",lb_sessions_won:"勝場",lb_frames_won:"勝局",lb_played:"場次",
+    lb_sessions_played:"場次",lb_frames_played:"總局數",
+    lb_win_rate:"勝率",
+    lb_sessions_label:"🏅 場次排行榜",lb_frames_label:"🎱 局數排行榜",
     lb_frames_na:"（尚無局數記錄）",
     lb_empty:"尚無記錄。請先記錄一場對局。",
     hist_title:"歷史",hist_sub:"所有涉及你的對局，最新優先。",
     hist_filter:"按對手篩選",hist_all:"所有對手",
-    hist_opened: "開桿", hist_break: "連桿", hist_frames:"局數",
+    hist_opened:"開桿",hist_break:"連桿",hist_frames:"局數",
     hist_empty:"找不到記錄。",
     hist_set_name:"請先在上方設定你的名字以查看對局歷史。",
     h2h_title:"直接對決",h2h_sub:"選擇兩位球員查看對決詳情。",
     h2h_p1:"球員1",h2h_p2:"球員2",
-    h2h_sessions: "場次", h2h_total_frames:"總局數",
-    h2h_p1_frames: "球員1勝局", h2h_p2_frames:"球員2勝局",
+    h2h_sessions:"場次",h2h_total_frames:"總局數",
+    h2h_p1_frames:"球員1勝局",h2h_p2_frames:"球員2勝局",
     h2h_win_rate:"場次勝率",h2h_recent:"近期狀態",
     h2h_break_perf:"開桿優勢",
     h2h_when_p1:"{p1}先開桿時",h2h_when_p2:"{p2}先開桿時",
@@ -580,7 +638,7 @@ const T = {
     h2h_same:"球員1和球員2不能相同。",
     h2h_empty:"尚無{p1}與{p2}的對局記錄。",
     stats_title:"我的統計",stats_sub:"你與所有對手的累計成績。",
-    stats_sessions: "場次", stats_frames:"總局數",stats_wins:"勝場",stats_losses:"敗場",
+    stats_sessions:"場次",stats_frames:"總局數",stats_wins:"勝場",stats_losses:"敗場",
     stats_win_rate:"勝率",stats_by_opp:"按對手",
     stats_empty:"尚無記錄。",
     stats_best_break:"歷史最高連桿",
@@ -591,8 +649,30 @@ const T = {
     setup_label:"JSONBin Bin ID",setup_btn:"儲存並連線",setup_clear:"清除",
     setup_change:"更改Bin ID",
     setup_current:"目前ID：",setup_none:"尚未儲存。",
-    footer_sync:"數據同步至JSONBin",
+    footer_sync:"數據同步至Supabase",
     btn_refresh:"重新整理",
+    group_title:"加入或建立群組",
+    group_desc:"每個群組有獨立記錄，將群組ID分享給朋友即可加入。",
+    group_my_groups:"我的群組",
+    group_create_label:"建立新群組",
+    group_name_ph:"例如：星期二斯諾克",
+    group_create_btn:"建立群組",
+    group_join_label:"加入現有群組",
+    group_join_desc:"輸入朋友分享給你的群組ID。",
+    group_join_btn:"加入群組",
+    group_switch:"切換群組",
+    group_leave:"離開",
+    group_id_copied:"群組ID已複製！",
+    group_creating:"⟳ 建立群組中…",
+    group_created:"✓ 群組已建立！你的群組ID：",
+    group_joining:"⟳ 加入群組中…",
+    group_joined:"✓ 已加入！",
+    group_not_found:"✗ 找不到此群組，請確認ID後重試。",
+    group_err:"✗ 錯誤：{msg}",
+    group_name_required:"請先輸入群組名稱。",
+    group_id_required:"請輸入群組ID。",
+    group_manage:"管理群組",
+    group_leave_confirm:"離開群組「{name}」？你可隨時用群組ID重新加入。",
     setup_backend:"儲存後端",
     setup_jb_desc:"免費JSON儲存服務。終生10,000次請求 — 休閒使用可用多年。",
     setup_sb_desc:"免費Postgres資料庫。無限API請求 — 適合長期使用。",
@@ -653,25 +733,19 @@ function setLang(l){
 /* ============================================================
    STORAGE CONFIG
    ────────────────────────────────────────────────────────────
-   Set STORAGE to "jsonbin" or "supabase" to choose backend.
-   Then fill in the credentials for that backend only.
+   SUPABASE table setup — run this ONCE in Supabase SQL Editor.
+   Note: INSERT policy added so the app can create new groups.
 
-   JSONBIN:
-     BIN_ID — from jsonbin.io dashboard (public bin)
+     create table snooker_data (
+       id text primary key,
+       data jsonb not null
+     );
+     alter table snooker_data enable row level security;
+     create policy "public read"   on snooker_data for select using (true);
+     create policy "public write"  on snooker_data for update using (true);
+     create policy "public insert" on snooker_data for insert with check (true);
 
-   SUPABASE:
-     SUPA_URL  — https://<project-ref>.supabase.co
-     SUPA_KEY  — anon/public key from Project Settings → API
-     Table setup (run once in Supabase SQL Editor):
-       create table snooker_data (
-         id text primary key,
-         data jsonb not null
-       );
-       insert into snooker_data (id, data)
-         values ('main', '{"friends":[],"sessions":[]}');
-       alter table snooker_data enable row level security;
-       create policy "public read"  on snooker_data for select using (true);
-       create policy "public write" on snooker_data for update using (true);
+   No need to insert a 'main' row — the app creates group rows automatically.
    ============================================================ */
 // ─────────────────────────────────────────────────────────────
 // CHANGE THESE TWO LINES before pushing to GitHub.
@@ -699,7 +773,7 @@ let   SUPA_URL  = (localStorage.getItem(SUPA_URL_KEY) || DEFAULT_SUPA_URL)
                     .replace(/\/rest\/v1\/?$/, "");
 let   SUPA_KEY  = localStorage.getItem(SUPA_KEY_KEY) || DEFAULT_SUPA_KEY;
 const SUPA_TABLE = "snooker_data";
-const SUPA_ROW   = "main";
+// SUPA_ROW is now dynamic — set by activeGroup below
 
 /* ── JSONBin helpers ── */
 async function jsonbinLoad(){
@@ -721,20 +795,18 @@ function supaHeaders(){
   return {"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`};
 }
 function supaBase(){
-  // Strip trailing slashes and any accidental /rest/v1 suffix
-  // (Supabase dashboard sometimes shows the API URL with /rest/v1 appended)
   return SUPA_URL.replace(/\/+$/, "").replace(/\/rest\/v1\/?$/, "");
 }
-async function supaLoad(){
-  const url = `${supaBase()}/rest/v1/${SUPA_TABLE}?id=eq.${SUPA_ROW}&select=data`;
+async function supaLoad(rowId){
+  const url = `${supaBase()}/rest/v1/${SUPA_TABLE}?id=eq.${encodeURIComponent(rowId)}&select=data`;
   const r = await fetch(url, {headers:{...supaHeaders(),"Accept":"application/json"}});
   if(!r.ok) throw new Error(`Supabase ${r.status}`);
   const rows = await r.json();
-  if(!rows.length) throw new Error("Supabase: no data row found. Did you run the SQL setup?");
+  if(!rows.length) return null; // group doesn't exist yet
   return rows[0].data;
 }
-async function supaSave(d){
-  const url = `${supaBase()}/rest/v1/${SUPA_TABLE}?id=eq.${SUPA_ROW}`;
+async function supaSave(rowId, d){
+  const url = `${supaBase()}/rest/v1/${SUPA_TABLE}?id=eq.${encodeURIComponent(rowId)}`;
   const r = await fetch(url, {
     method:"PATCH",
     headers:{...supaHeaders(),"Prefer":"return=minimal"},
@@ -742,13 +814,38 @@ async function supaSave(d){
   });
   if(!r.ok) throw new Error(`Supabase ${r.status}`);
 }
+async function supaCreate(rowId){
+  const url = `${supaBase()}/rest/v1/${SUPA_TABLE}`;
+  const r = await fetch(url, {
+    method:"POST",
+    headers:{...supaHeaders(),"Prefer":"return=minimal"},
+    body:JSON.stringify({id:rowId, data:{friends:[],sessions:[]}})
+  });
+  if(r.status===401||r.status===403){
+    throw new Error(`Permission denied (${r.status}). Run in Supabase SQL Editor: grant insert on snooker_data to anon;`);
+  }
+  if(!r.ok) throw new Error(`Supabase ${r.status}`);
+}
 
-/* ── Unified API ── */
+/* ── Unified API — uses activeGroup as the data row key ── */
 async function remoteLoad(){
-  return STORAGE === "supabase" ? supaLoad() : jsonbinLoad();
+  if(STORAGE === "supabase") return supaLoad(activeGroup);
+  return jsonbinLoad();
 }
 async function remoteSave(d){
-  return STORAGE === "supabase" ? supaSave(d) : jsonbinSave(d);
+  if(STORAGE === "supabase") return supaSave(activeGroup, d);
+  return jsonbinSave(d);
+}
+async function remoteCreateGroup(groupId){
+  if(STORAGE === "supabase") return supaCreate(groupId);
+  // JSONBin is single-bin only — groups are simulated in the same bin
+}
+async function remoteGroupExists(groupId){
+  if(STORAGE === "supabase"){
+    const d = await supaLoad(groupId);
+    return d !== null;
+  }
+  return true; // JSONBin always "exists"
 }
 function isConfigured(){
   if(STORAGE === "supabase")
@@ -904,7 +1001,16 @@ document.getElementById("importFileInput").addEventListener("change", async (e) 
 let data={friends:[],sessions:[]};
 let activeProfile=localStorage.getItem("snooker_active_profile")||null;
 let selOpener="p1", selWinner="p1", selBreakPlayer="p1";
-let frameRows=[]; // local array of {score1,score2} while recording
+let frameRows=[];
+
+// Group management
+// groups = [{id:"grp_7F3K", name:"Tuesday Boys"}, ...]  (stored on this device)
+const GROUPS_KEY = "snooker_groups";
+const ACTIVE_GROUP_KEY = "snooker_active_group";
+function loadGroups(){ try{ return JSON.parse(localStorage.getItem(GROUPS_KEY)||"[]"); }catch(e){return[];} }
+function saveGroups(g){ localStorage.setItem(GROUPS_KEY, JSON.stringify(g)); }
+let groups = loadGroups();
+let activeGroup = localStorage.getItem(ACTIVE_GROUP_KEY) || null;
 
 /* ============================================================
    SYNC BAR
@@ -930,14 +1036,178 @@ function checkSetup(){
     document.querySelectorAll("nav.tabs button").forEach(b=>b.disabled=true);
     showSync("setup",t("sync_setup"));
     renderSetupScreen();
+  } else if(!activeGroup){
+    // Backend configured but no group selected — show group screen
+    document.querySelectorAll("main > section.panel").forEach(x=>x.style.display="none");
+    document.getElementById("tab-group").style.display="block";
+    document.getElementById("tab-group").classList.remove("config-not-set");
+    document.querySelectorAll("nav.tabs button").forEach(b=>b.disabled=true);
+    hideSync();
+    renderGroupScreen();
   } else {
     s.style.display="none";s.classList.add("config-not-set");
+    document.getElementById("tab-group").style.display="none";
+    document.getElementById("tab-group").classList.add("config-not-set");
     document.querySelectorAll("nav.tabs button").forEach(b=>b.disabled=false);
     hideSync();initApp();
   }
 }
+function generateGroupId(){
+  const words=["POOL","BREAK","SNOOK","BAIZE","CHALK","TABLE","FRAME","POCKET"];
+  const w=words[Math.floor(Math.random()*words.length)];
+  const n=Math.random().toString(36).slice(2,6).toUpperCase();
+  return `${w}-${n}`;
+}
+
+function renderGroupScreen(){
+  const existing = document.getElementById("groupExisting");
+  const list = document.getElementById("groupExistingList");
+  if(groups.length){
+    existing.style.display="block";
+    list.innerHTML="";
+    groups.forEach(g=>{
+      const isActive=g.id===activeGroup;
+      const row=document.createElement("div");
+      row.className="player-row";
+      row.innerHTML=`
+        <div style="flex:1;">
+          <div class="player-name-cell" style="display:flex;align-items:center;gap:8px;">
+            ${esc(g.name)}
+            ${isActive?`<span style="font-family:var(--mono);font-size:10px;background:rgba(212,165,33,0.15);color:var(--gold);border:1px solid rgba(212,165,33,0.3);border-radius:999px;padding:2px 8px;">${lang==="zh"?"目前":"active"}</span>`:""}
+          </div>
+          <div class="player-sessions" style="letter-spacing:1px;">${g.id}</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn small${isActive?" secondary":""}" data-gid="${g.id}">
+            ${isActive?(lang==="zh"?"已在此群組":"Current"):(lang==="zh"?"切換":"Switch")}
+          </button>
+          <button class="btn secondary small" data-leave="${g.id}">${t("group_leave")}</button>
+        </div>`;
+      const switchBtn=row.querySelector("[data-gid]");
+      if(!isActive) switchBtn.addEventListener("click",()=>switchGroup(g.id));
+      else switchBtn.disabled=true;
+      row.querySelector("[data-leave]").addEventListener("click",()=>leaveGroup(g.id,g.name));
+      list.appendChild(row);
+    });
+  } else {
+    existing.style.display="none";
+  }
+}
+
+async function createGroup(){
+  const name=document.getElementById("groupNameInput").value.trim();
+  const status=document.getElementById("createGroupStatus");
+  if(!name){status.textContent=t("group_name_required");status.style.color="var(--red-ball)";return;}
+  const groupId=generateGroupId();
+  status.textContent=t("group_creating");status.style.color="var(--ivory-dim)";
+  try{
+    await remoteCreateGroup(groupId);
+    groups.push({id:groupId,name});
+    saveGroups(groups);
+    status.innerHTML=`<span style="color:var(--gold)">${t("group_created")}</span><br>
+      <span style="font-size:16px;letter-spacing:2px;color:var(--ivory);">${groupId}</span><br>
+      <span style="color:var(--ivory-dim);font-size:12px;">Share this ID with your friends so they can join.</span>`;
+    document.getElementById("groupNameInput").value="";
+    setTimeout(()=>switchGroup(groupId),1800);
+  }catch(e){
+    status.textContent=t("group_err",{msg:e.message});status.style.color="var(--red-ball)";
+  }
+}
+
+async function joinGroup(){
+  const raw=document.getElementById("groupJoinInput").value.trim().toUpperCase();
+  const status=document.getElementById("joinGroupStatus");
+  if(!raw){status.textContent=t("group_id_required");status.style.color="var(--red-ball)";return;}
+  status.textContent=t("group_joining");status.style.color="var(--ivory-dim)";
+  try{
+    const exists=await remoteGroupExists(raw);
+    if(!exists){status.textContent=t("group_not_found");status.style.color="var(--red-ball)";return;}
+    // Add to local list if not already there
+    if(!groups.find(g=>g.id===raw)){
+      const name=raw; // use ID as name; they can rename later if needed
+      groups.push({id:raw,name});
+      saveGroups(groups);
+    }
+    document.getElementById("groupJoinInput").value="";
+    status.textContent=t("group_joined");status.style.color="var(--gold)";
+    setTimeout(()=>switchGroup(raw),800);
+  }catch(e){
+    status.textContent=t("group_err",{msg:e.message});status.style.color="var(--red-ball)";
+  }
+}
+
+function leaveGroup(id,name){
+  if(!confirm(t("group_leave_confirm",{name}))) return;
+  groups=groups.filter(g=>g.id!==id);
+  saveGroups(groups);
+  if(activeGroup===id){
+    activeGroup=groups.length?groups[0].id:null;
+    localStorage.setItem(ACTIVE_GROUP_KEY,activeGroup||"");
+  }
+  renderGroupScreen();
+  checkSetup();
+}
+
+function switchGroup(id){
+  activeGroup=id;
+  localStorage.setItem(ACTIVE_GROUP_KEY,id);
+  data={friends:[],sessions:[]};
+  checkSetup();
+}
+
+function renderGroupBar(){
+  const bar=document.getElementById("groupBar");
+  bar.className="group-bar";bar.innerHTML="";
+  if(!groups.length||!activeGroup) return;
+  const activeG=groups.find(g=>g.id===activeGroup);
+  if(!activeG) return;
+
+  // Show all joined groups as chips — tap to switch
+  groups.forEach(g=>{
+    const chip=document.createElement("div");
+    chip.className="group-chip"+(g.id===activeGroup?" active":"");
+    chip.title=g.id===activeGroup?t("group_id_copied"):`Switch to ${g.name}`;
+    chip.innerHTML=`🎱 <span>${esc(g.name)}</span> <span class="gid">${g.id}</span>`;
+    chip.addEventListener("click",()=>{
+      if(g.id===activeGroup){
+        // Tap active chip → copy ID
+        navigator.clipboard?.writeText(g.id).then(()=>toast(t("group_id_copied")));
+      } else {
+        // Tap another chip → switch to it
+        switchGroup(g.id);
+      }
+    });
+    bar.appendChild(chip);
+  });
+
+  // Always-visible "Join / Create" button
+  const add=document.createElement("button");
+  add.className="refresh-btn";
+  add.textContent="＋ "+(lang==="zh"?"加入/建立群組":"Join / Create");
+  add.title="Join an existing group or create a new one";
+  add.addEventListener("click",()=>{
+    document.getElementById("tab-group").classList.remove("config-not-set");
+    document.getElementById("tab-group").style.display="block";
+    document.querySelectorAll("main > section.panel:not(#tab-group)").forEach(s=>s.style.display="none");
+    document.querySelectorAll("nav.tabs button").forEach(b=>{b.classList.remove("active");b.disabled=true;});
+    renderGroupScreen();
+  });
+  bar.appendChild(add);
+
+  // Refresh button
+  const rf=document.createElement("button");
+  rf.className="refresh-btn";rf.textContent="⟳";rf.title="Refresh data";
+  rf.addEventListener("click",manualRefresh);
+  bar.appendChild(rf);
+}
+
+// Wire up group screen buttons
+document.getElementById("createGroupBtn").addEventListener("click",createGroup);
+document.getElementById("joinGroupBtn").addEventListener("click",joinGroup);
+document.getElementById("groupJoinInput").addEventListener("keydown",e=>{if(e.key==="Enter")joinGroup();});
+document.getElementById("groupNameInput").addEventListener("keydown",e=>{if(e.key==="Enter")createGroup();});
+
 function renderSetupScreen(){
-  // Show which backend is selected and current saved values
   const isSupa = STORAGE==="supabase";
   document.getElementById("setupBackendToggle").querySelectorAll(".toggle-btn")
     .forEach(b=>b.classList.toggle("selected", b.dataset.val===STORAGE));
@@ -983,9 +1253,9 @@ document.getElementById("setupSaveBtn").addEventListener("click", async ()=>{
       statusEl.textContent = "✗ " + t("toast_bad_supa_key");
       statusEl.style.color = "var(--red-ball)"; return;
     }
-    // Test the connection before saving
+    // Test the connection before saving — just verify the table is accessible
     statusEl.textContent = "⟳ Testing connection…";
-    const testUrl = `${url}/rest/v1/snooker_data?id=eq.main&select=data`;
+    const testUrl = `${url}/rest/v1/${SUPA_TABLE}?select=id&limit=1`;
     try {
       const r = await fetch(testUrl, {
         headers:{
@@ -1003,11 +1273,7 @@ document.getElementById("setupSaveBtn").addEventListener("click", async ()=>{
         statusEl.title = `URL tried: ${testUrl}`;
         return;
       }
-      if(!Array.isArray(body) || !body.length){
-        statusEl.textContent = "✗ Connected but no data row found. Did you run the SQL in Supabase SQL Editor?";
-        statusEl.style.color = "var(--red-ball)"; return;
-      }
-      // All good — save cleaned URL and proceed
+      // Connected — save and proceed to group screen
       SUPA_URL = url; SUPA_KEY = key;
       localStorage.setItem(SUPA_URL_KEY, url);
       localStorage.setItem(SUPA_KEY_KEY, key);
@@ -1071,19 +1337,19 @@ document.getElementById("syncBar").addEventListener("click",function(){
   });
 });
 
-const CACHE_KEY = "snooker_data_cache";
-const CACHE_TS_KEY = "snooker_cache_ts";
-const STALE_MS = 30_000; // re-fetch from remote if data is older than 30s
+const CACHE_KEY = ()=>`snooker_cache_${activeGroup||"default"}`;
+const CACHE_TS_KEY = ()=>`snooker_cache_ts_${activeGroup||"default"}`;
+const STALE_MS = 30_000;
 
 function saveCache(d){
   try{
-    localStorage.setItem(CACHE_KEY, JSON.stringify(d));
-    localStorage.setItem(CACHE_TS_KEY, Date.now().toString());
+    localStorage.setItem(CACHE_KEY(), JSON.stringify(d));
+    localStorage.setItem(CACHE_TS_KEY(), Date.now().toString());
   }catch(e){}
 }
-function loadCache(){ try{ const r=localStorage.getItem(CACHE_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
-function cacheAge(){ return Date.now() - (parseInt(localStorage.getItem(CACHE_TS_KEY))||0); }
-function cacheIsStale(){ return cacheAge() > STALE_MS; }
+function loadCache(){ try{ const r=localStorage.getItem(CACHE_KEY()); return r?JSON.parse(r):null; }catch(e){return null;} }
+function cacheAge(){ return Date.now()-(parseInt(localStorage.getItem(CACHE_TS_KEY()))||0); }
+function cacheIsStale(){ return cacheAge()>STALE_MS; }
 
 async function fetchAndRender(quiet=false){
   if(!quiet) showSync("saving", t("sync_refreshing"));
@@ -1161,6 +1427,7 @@ function getAllPlayers(){
   return [...s].sort();
 }
 function renderProfileBar(){
+  renderGroupBar(); // always update group bar too
   const bar=document.getElementById("profileBar");bar.innerHTML="";
   const players=getAllPlayers();
   if(!activeProfile){
@@ -1178,9 +1445,17 @@ function renderProfileBar(){
 function promptNewProfile(){
   const n=window.prompt(t("profile_prompt"));if(!n)return;
   const nm=n.trim();if(!nm)return;
+  // Add to friends list if not already there
+  if(!data.friends.includes(nm)) data.friends.push(nm);
+  // Set as active profile on this device
   activeProfile=nm;localStorage.setItem("snooker_active_profile",nm);
-  if(!data.friends.includes(nm)){data.friends.push(nm);}
-  renderProfileBar();renderAll();
+  // Save to remote so everyone sees the new player in their dropdowns
+  saveAndSync().then(()=>{
+    renderProfileBar();
+    populatePlayerSelects(); // refresh dropdowns immediately
+  });
+  renderProfileBar();
+  populatePlayerSelects();
 }
 
 /* ============================================================
@@ -1228,29 +1503,11 @@ function toast(msg){
    ============================================================ */
 function allPlayerOptions(){return data.friends.slice().sort();}
 
-function buildPlayerSelect(selId,rowId,inputId,addBtnId,onChange){
-  const sel=document.getElementById(selId);sel.innerHTML="";
-  allPlayerOptions().forEach(f=>{const o=document.createElement("option");o.value=f;o.textContent=f;sel.appendChild(o);});
-  const addOpt=document.createElement("option");addOpt.value="__new__";addOpt.textContent=t("new_player_opt");sel.appendChild(addOpt);
-  sel.onchange=()=>{
-    document.getElementById(rowId).style.display=sel.value==="__new__"?"flex":"none";
-    updateOpenerWinnerLabels();if(onChange)onChange();
-  };
-  document.getElementById(addBtnId).onclick=()=>{
-    const nm=document.getElementById(inputId).value.trim();if(!nm)return;
-    if(!data.friends.includes(nm))data.friends.push(nm);
-    document.getElementById(inputId).value="";
-    buildPlayerSelect(selId,rowId,inputId,addBtnId,onChange);
-    sel.value=nm;document.getElementById(rowId).style.display="none";
-    updateOpenerWinnerLabels();
-  };
-}
-
-function getP1Name(){const s=document.getElementById("p1Select");return s.value==="__new__"?document.getElementById("newP1Input").value.trim()||"P1":s.value||"P1";}
-function getP2Name(){const s=document.getElementById("p2Select");return s.value==="__new__"?document.getElementById("newP2Input").value.trim()||"P2":s.value||"P2";}
+function getP1Name(){return document.getElementById("p1Select").value||"P1";}
+function getP2Name(){return document.getElementById("p2Select").value||"P2";}
 
 function updateOpenerWinnerLabels(){
-  const p1=getP1Name(),p2=getP2Name();
+  const p1=getP1Name(), p2=getP2Name();
   document.getElementById("openerP1Btn").textContent=p1;
   document.getElementById("openerP2Btn").textContent=p2;
   document.getElementById("winnerP1Btn").textContent=p1;
@@ -1261,18 +1518,59 @@ function updateOpenerWinnerLabels(){
   document.getElementById("sbName2").textContent=p2;
 }
 
+/* ------------------------------------------------------------------
+   Player selects — simple, no add-in-form logic.
+   Players are added via the profile bar "＋ New profile" button.
+   Dropdowns just show data.friends, nothing else.
+   ------------------------------------------------------------------ */
 function populatePlayerSelects(){
-  buildPlayerSelect("p1Select","newP1Row","newP1Input","addP1Btn",updateOpenerWinnerLabels);
-  buildPlayerSelect("p2Select","newP2Row","newP2Input","addP2Btn",updateOpenerWinnerLabels);
-  // Pre-select active profile for p1 if available
-  const s=document.getElementById("p1Select");
-  if(activeProfile&&data.friends.includes(activeProfile))s.value=activeProfile;
-  // Pre-select a different player for p2
-  const p2s=document.getElementById("p2Select");
-  const options=allPlayerOptions().filter(f=>f!==getP1Name());
-  if(options.length)p2s.value=options[0];
+  const p1sel=document.getElementById("p1Select");
+  const p2sel=document.getElementById("p2Select");
+  const p1cur=p1sel.value;
+  const p2cur=p2sel.value;
+  const players=data.friends.slice().sort();
+
+  [p1sel,p2sel].forEach(sel=>{
+    sel.innerHTML="";
+    if(!players.length){
+      const o=document.createElement("option");
+      o.value="";o.textContent=lang==="zh"?"請先在上方新增球員":"Add players above first";
+      sel.appendChild(o);
+      return;
+    }
+    players.forEach(f=>{
+      const o=document.createElement("option");o.value=f;o.textContent=f;sel.appendChild(o);
+    });
+  });
+
+  if(!players.length){updateOpenerWinnerLabels();return;}
+
+  // Restore P1: prefer remembered value, else active profile, else first
+  if(p1cur&&players.includes(p1cur)) p1sel.value=p1cur;
+  else if(activeProfile&&players.includes(activeProfile)) p1sel.value=activeProfile;
+  else p1sel.value=players[0];
+
+  // Restore P2: prefer remembered value (if ≠ P1), else second player, else first
+  const p1v=p1sel.value;
+  if(p2cur&&players.includes(p2cur)&&p2cur!==p1v) p2sel.value=p2cur;
+  else{
+    const other=players.find(f=>f!==p1v);
+    p2sel.value=other||players[0];
+  }
+
   updateOpenerWinnerLabels();
+  validatePlayers();
 }
+
+function validatePlayers(){
+  const same=document.getElementById("p1Select").value===document.getElementById("p2Select").value
+    &&document.getElementById("p1Select").value!=="";
+  document.getElementById("samePlyerErr").style.display=same?"block":"none";
+}
+
+// Wire up change events once
+document.getElementById("p1Select").addEventListener("change",()=>{validatePlayers();updateOpenerWinnerLabels();});
+document.getElementById("p2Select").addEventListener("change",()=>{validatePlayers();updateOpenerWinnerLabels();});
 
 // Opener toggle
 function setupToggle(containerId,onSet){
@@ -1356,12 +1654,14 @@ function syncFramesToSessionScore(){
 document.getElementById("saveSessionBtn").addEventListener("click",async()=>{
   if(!activeProfile){promptNewProfile();if(!activeProfile)return;}
 
-  const p1=getP1Name(),p2=getP2Name();
-  if(!p1||!p2){toast(t("toast_same_player"));return;}
-  if(p1.toLowerCase()===p2.toLowerCase()){toast(t("toast_same_player"));return;}
-
-  // Ensure both players are in friends list
-  [p1,p2].forEach(n=>{if(!data.friends.includes(n))data.friends.push(n);});
+  const p1=document.getElementById("p1Select").value;
+  const p2=document.getElementById("p2Select").value;
+  if(!p1||!p2){toast(lang==="zh"?"請先新增球員":"Add players first");return;}
+  if(p1===p2){
+    document.getElementById("samePlyerErr").style.display="block";
+    toast(t("toast_same_player"));return;
+  }
+  document.getElementById("samePlyerErr").style.display="none";
 
   const dateVal=document.getElementById("matchDate").value;
   const s1raw=sc1.value.trim(),s2raw=sc2.value.trim();
@@ -1451,18 +1751,20 @@ function renderLeaderboard(){
 
   function mkTable(sorted,valKey,valHeader,rateKey,showFrames){
     const noFrameData=showFrames&&sorted.every(p=>p.framesPlayed===0);
+    const playedHeader=showFrames?t("lb_frames_played"):t("lb_sessions_played");
     return `<table class="lb-table"><thead><tr>
-      <th>#</th><th>${t("lb_player")}</th><th>${valHeader}</th><th>${t("lb_played")}</th><th>${t("lb_win_rate")}</th>
+      <th>#</th><th>${t("lb_player")}</th><th>${valHeader}</th><th>${playedHeader}</th><th>${t("lb_win_rate")}</th>
     </tr></thead><tbody>${sorted.map((p,i)=>{
       const rank=i===0?"🏆":i===1?"2":i===2?"3":`${i+1}`;
       const rankCls=i===0?"r1":i===1?"r2":i===2?"r3":"";
       const val=noFrameData?`<span style="color:var(--ivory-dim);font-size:12px;">${t("lb_frames_na")}</span>`:p[valKey];
       const rate=noFrameData?"—":p[rateKey]+"%";
+      const playedVal=showFrames?(noFrameData?"—":p.framesPlayed):p.sessions;
       return `<tr>
         <td><div class="lb-rank ${rankCls}">${rank}</div></td>
         <td class="lb-name">${esc(p.name)}</td>
         <td class="lb-wins">${val}</td>
-        <td class="lb-sub">${p.sessions}</td>
+        <td class="lb-sub">${playedVal}</td>
         <td class="lb-sub">${rate}</td>
       </tr>`;
     }).join("")}</tbody></table>`;
@@ -1769,6 +2071,7 @@ document.getElementById("footerSync").textContent =
 window.setLang=setLang;
 window.toggleAdminMode=toggleAdminMode;
 window.manualRefresh=manualRefresh;
+window.promptNewProfile=promptNewProfile;
 applyAdminMode();
 checkSetup();
 })();
