@@ -13,24 +13,19 @@ jobs:
     steps:
       - name: Ping Supabase — snooker_data
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          echo "Pinging Supabase..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
             "${{ secrets.SUPABASE_URL }}/rest/v1/snooker_data?select=id&limit=1" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
-          echo "snooker_data ping status: $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "WARNING: Unexpected status $STATUS"
-            exit 1
-          fi
-
-      - name: Ping Supabase — sports_data
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "${{ secrets.SUPABASE_URL }}/rest/v1/sports_data?select=id&limit=1" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
-          echo "sports_data ping status: $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "WARNING: Unexpected status $STATUS"
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Accept: application/json")
+          STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS")
+          echo "Status: $STATUS"
+          echo "Response body: $BODY"
+          if [ "$STATUS" = "200" ] || [ "$STATUS" = "206" ]; then
+            echo "✓ Supabase is alive"
+          else
+            echo "✗ Failed with status: $STATUS"
             exit 1
           fi
